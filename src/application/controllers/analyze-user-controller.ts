@@ -1,12 +1,17 @@
 import { Request, Response } from 'express';
 
+import { container } from 'tsyringe';
 import HTTPResponse from '../../config/http-response';
-import { AnalyzeUserUseCase } from '../usecases/analyze-user';
+import AnalyzeUserUseCase from '../usecases/analyze-user';
 
-class AnalyzeUserController implements AnalyzeUserUseCase {
+class AnalyzeUserController {
   async handle(request: Request, response: Response): Promise<Response> {
 
-    return new HTTPResponse(response).ok({ message: 'Hello World!' });
+    const getChatUseCase = container.resolve(AnalyzeUserUseCase);
+
+    const element = await getChatUseCase.execute('123');
+
+    return new HTTPResponse(response).ok({ message: element });
   }
 }
 

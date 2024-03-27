@@ -1,0 +1,25 @@
+{
+  "name": "tcc-matheus",
+  "version": "1.0.0",
+  "description": "Manual analysis automation",
+  "main": "index.js",
+  "compilerOptions": {
+    "esModuleInterop": true
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "ts-node-esm src/server.ts"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/node": "^20.11.30",
+    "typescript": "^5.4.2"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}

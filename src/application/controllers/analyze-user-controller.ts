@@ -1,17 +1,20 @@
 import { Request, Response } from 'express';
 
-import { container } from 'tsyringe';
 import HTTPResponse from '../../config/http-response';
 import AnalyzeUserUseCase from '../usecases/analyze-user';
 
 class AnalyzeUserController {
-  async handle(request: Request, response: Response): Promise<Response> {
+  async handle(req: Request, res: Response): Promise<Response> {
+    const csvFile = req.file;
 
-    const getChatUseCase = container.resolve(AnalyzeUserUseCase);
+    if (!csvFile) {
+      return new HTTPResponse(res).notFound({ message: "Nenhum arquivo enviado" });
+    }
 
-    const element = await getChatUseCase.execute('123');
-
-    return new HTTPResponse(response).ok({ message: element });
+    return new AnalyzeUserUseCase(csvFile)
+      .perform()
+      .then(response => new HTTPResponse(res).ok({ message: "Arquivo CSV processado com sucesso" }))
+      .catch(err => new HTTPResponse(res).internalServerError({ message: "Erro ao processar o arquivo CSV" }));
   }
 }
 

@@ -3,12 +3,12 @@ import fs from 'fs';
 
 export class KYCModelUseCase {
   public prompt: string;
-  public filesImgs: string[];
+  public filesImgs: number[];
 
   private genAI: GoogleGenerativeAI;
   private model: any;
 
-  constructor(public message: string, public codeImg: string[]) {
+  constructor(public message: string, public codeImg: number[]) {
     this.prompt = message;
     this.filesImgs = codeImg;
 
@@ -20,7 +20,6 @@ export class KYCModelUseCase {
     const imagesBuffer = this.filesImgs.map(img => {
       const path = `/Users/matheushenrique/Documents/marjosports/script_image/src/controllers/Dezembro/${img}.jpg`;
       if (fs.existsSync(path)) {
-        console.log("CODE IMAGE ", img)
         const data = fs.readFileSync(path).toString('base64');
         return {
           inlineData: {

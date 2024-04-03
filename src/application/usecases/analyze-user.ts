@@ -26,8 +26,8 @@ export class AnalyzeUserUseCase {
                             console.error('\n === KYC reprovado com sucesso === \n');
                         }
                     })
-                    .catch(() => {
-                        console.error('Erro ao processar KYC');
+                    .catch((err) => {
+                        console.error('Erro ao processar KYC', err);
                     });
             })
             .on('end', () => {

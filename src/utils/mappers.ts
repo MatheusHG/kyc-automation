@@ -12,27 +12,23 @@ export function extractCPFNumber(data: string): string | null {
 }
 
 export function extractName(data: string): string | null {
-    if (data.includes('Nome:')) {
-        const nameRegex = /Nome: (.*)/;
-        const matches = data.match(nameRegex);
-    
-        if (matches && matches.length > 0) {
-            return matches[1];
-        }
+    const regex = /\*?\*?Nome:\*?\*?\s*(.+)/;
+    const match = data.match(regex);
+
+    if (match && match.length > 1) {
+        return match[1].trim(); // Remove espaços em branco extras no início e no final
     }
-    
+
     return null;
 }
 
 export function extractDateOfBirth(data: string): string | null {
-    if (data.includes('Data de Nascimento:')) {
-        const dateOfBirthRegex = /Data de Nascimento: (.*)/;
-        const matches = data.match(dateOfBirthRegex);
-    
-        if (matches && matches.length > 0) {
-            return matches[1];
-        }
+    const regex = /\*?\*?Data de Nascimento:\*?\*?\s*(.+)/;
+    const matches = data.match(regex);
+
+    if (matches && matches.length > 1) {
+        return matches[1];
     }
-    
+
     return null;
 }

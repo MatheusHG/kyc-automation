@@ -13,7 +13,7 @@ class AnalyzeUserController {
 
     return new AnalyzeUserUseCase(csvFile)
       .perform()
-      .then(response => new HTTPResponse(res).ok({ message: "Arquivo CSV processado com sucesso" }))
+      .then(response => new HTTPResponse(res).ok({ message: response }))
       .catch(err => new HTTPResponse(res).internalServerError({ message: "Erro ao processar o arquivo CSV" }));
   }
 }

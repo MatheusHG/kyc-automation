@@ -19,7 +19,7 @@ export class AnalyzeUserUseCase {
     fileStream
       .pipe(csv())
       .on("data", (data) => {
-        const randomDelay = Math.floor(Math.random() * 20) + 1; // Gera um número aleatório entre 1 e 20
+        const randomDelay = Math.floor(Math.random() * 300) + 1; // Gera um número aleatório entre 1 e 20
         console.log(
           `Aguardando ${randomDelay} segundos antes de chamar execute novamente...`
         );

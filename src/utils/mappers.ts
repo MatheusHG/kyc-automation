@@ -23,7 +23,7 @@ export function extractName(data: string): string | null {
 }
 
 export function extractDateOfBirth(data: string): string | null {
-    const regex = /\*?\*?Data de Nascimento:\*?\*?\s*(.+)/;
+    const regex = /\*?\*?(?:Data de )?Nascimento:\*?\*?\s*(.+)/;
     const matches = data.match(regex);
 
     if (matches && matches.length > 1) {

@@ -1,4 +1,8 @@
-import { extractCPFNumber, extractDateOfBirth, extractName } from "../../utils/mappers";
+import {
+  extractCPFNumber,
+  extractDateOfBirth,
+  extractName,
+} from "../../utils/mappers";
 import { KYCModelUseCase } from "./kyc-model";
 
 export class AnalyzeKYCUseCase {
@@ -8,36 +12,44 @@ export class AnalyzeKYCUseCase {
   public kycUser: KYCData = {} as KYCData;
   public alertsUser: any[];
   public componentMap: ComponentMap = {
-    CPF_NOT_FOUND: "CPF não encontrado no documento do cliente / Documento sem CPF",
-    DOCTYPE_DIFFERENT: "Tipo do documento Frente é diferente do documento Verso (DOCTYPE)",
-    NAME_DIFFERENT: "Nome informado pelo cliente é diferente do documento, nome documento",
-    DATE_OF_BIRTH_DIFFERENT: "Data Nascimento informado pelo cliente é diferente do documento, data nascimento documento",
+    CPF_NOT_FOUND:
+      "CPF não encontrado no documento do cliente / Documento sem CPF",
+    DOCTYPE_DIFFERENT:
+      "Tipo do documento Frente é diferente do documento Verso (DOCTYPE)",
+    NAME_DIFFERENT:
+      "Nome informado pelo cliente é diferente do documento, nome documento",
+    DATE_OF_BIRTH_DIFFERENT:
+      "Data Nascimento informado pelo cliente é diferente do documento, data nascimento documento",
     NO_VALID_INFORMATION: "Nenhuma informação válida na frente do documento",
-    CPF_DIFFERENT: "CPF informado pelo cliente é diferente do documento, CPF documento"
-  }
+    CPF_DIFFERENT:
+      "CPF informado pelo cliente é diferente do documento, CPF documento",
+  };
 
   constructor(kycUser: any) {
-    this.kycUser = JSON.parse(kycUser['Meta']);
+    this.kycUser = JSON.parse(kycUser["Meta"]);
     this.alertsUser = [];
     this.modelUser = {} as ModelUser;
     this.modelResponse = [] as ModelAnalysis[];
   }
 
   async runModel() {
-    console.log("\n-=-=-= Lendo o Modelo =-=-=-")
-    const kycModelUseCase = new KYCModelUseCase("Extraia todas as informações presentes nas imagens", this.extractImages()); // Extraia apenas o número do cpf da imagem, se existir.
+    console.log("\n-=-=-= Lendo o Modelo =-=-=-");
+    const kycModelUseCase = new KYCModelUseCase(
+      "Extraia todas as informações presentes nas imagens",
+      this.extractImages()
+    ); // Extraia apenas o número do cpf da imagem, se existir.
     const result = await kycModelUseCase.execute();
     console.log("\n>> Dados extraidos:\n", result);
 
     this.modelUser = {
       cpf: extractCPFNumber(result),
       name: extractName(result),
-      dateOfBirth: extractDateOfBirth(result)
-    }
+      dateOfBirth: extractDateOfBirth(result),
+    };
   }
 
   async extractWarnings() {
-    console.log("-=-=-=-=-=-=-=-=-=-=-=-")
+    console.log("-=-=-=-=-=-=-=-=-=-=-=-");
     console.log("\n>> 📚 Analisando documento...");
     const avisos = this.kycUser.ocr.avisos;
 
@@ -50,18 +62,18 @@ export class AnalyzeKYCUseCase {
             return {
               case: filter,
               statusBefore: false,
-              statusAfter: await this.switchMapper(filter)
-            }
+              statusAfter: await this.switchMapper(filter),
+            };
           }
 
           return {
             case: filter,
             statusBefore: true,
-            statusAfter: true
+            statusAfter: true,
           }; // Se não for alerta, não precisa revalidar
         })
       );
-      
+
       return revalidations;
     } else return [] as any;
   }
@@ -75,17 +87,31 @@ export class AnalyzeKYCUseCase {
   async switchMapper(alertMessage: string) {
     console.log(">> Analisando Alerta: ", alertMessage);
 
-    switch(alertMessage) {
+    switch (alertMessage) {
       case "CPF não encontrado no documento do cliente / Documento sem CPF":
-        return this.validateCPF().then(result => {
+        return this.validateCPF().then((result) => {
+          if (result) return true;
+          return this.validateName().then(() => this.validateDateOfBirth());
+        });
+      case "CPF informado pelo cliente é diferente do documento, CPF documento":
+        return this.validateCPF().then((result) => {
           if (result) return true;
           return this.validateName().then(() => this.validateDateOfBirth());
         });
       case "Nome informado pelo cliente é diferente do documento, nome documento":
-        return this.validateName().then(result => {
+        return this.validateName().then((result) => {
           if (result) return true;
           return this.validateCPF().then(() => this.validateDateOfBirth());
         });
+      case "Data Nascimento informado pelo cliente é diferente do documento, data nascimento documento":
+        return this.validateDateOfBirth().then((result) => {
+          if (result) return true;
+          return this.validateName().then(() => this.validateCPF());
+        });
+      case "Nenhuma informação válida na frente do documento":
+        return this.validateName().then(() => this.validateCPF()).then(() => this.validateDateOfBirth());
+      case "Tipo do documento Frente é diferente do documento Verso (DOCTYPE)":
+        return this.validateName().then(() => this.validateCPF()).then(() => this.validateDateOfBirth());
       default:
         return false;
     }
@@ -95,7 +121,7 @@ export class AnalyzeKYCUseCase {
     const filesKYC = this.kycUser.ocr.filesId;
 
     const numbersArray = Object.values(filesKYC);
-  
+
     return numbersArray as number[];
   }
 
@@ -103,60 +129,82 @@ export class AnalyzeKYCUseCase {
     console.log("---- Validando nome...");
     console.log("- Nome extraído: ", this.modelUser.name);
     console.log("- Nome do cliente: ", this.kycUser.cliente.nome);
-    if(this.modelUser.name?.toLowerCase() === this.kycUser.cliente.nome.toLowerCase()) {
-      console.log(">>> APROVADO NO NOME <<<\n")
-      return true; 
-    }// identificamos que é igual na documentação
-    console.log(">>> REPROVADO NO NOME <<<\n")
+
+    const modelName = this.modelUser.name;
+    const clientName = this.kycUser.cliente.nome;
+
+    if(modelName === null || clientName === null) return false;
+
+    if (modelName.toLowerCase() === clientName.toLowerCase()) {
+      return true;
+    }
+
+    const modelParts = modelName.trim().split(" ");
+    const clientParts = clientName.trim().split(" ");
+
+    if(modelParts.length + 1 === clientParts.length) {
+      const modelLastName = modelParts[modelParts.length - 1].toLowerCase();
+      const clientLastName = clientParts[clientParts.length - 1].toLowerCase();
+      if (!clientLastName.includes(modelLastName)) {
+        return true;
+      }
+    }
+
     return false;
   }
 
   async validateDateOfBirth() {
     console.log("---- Validando Data de Nascimento...");
     console.log("- Data de Nascimento extraída: ", this.modelUser.dateOfBirth);
-    console.log("- Data de Nascimento do cliente: ", this.kycUser.cliente.data_nascimento);
-    if(this.modelUser.dateOfBirth === this.formatDate(this.kycUser.cliente.data_nascimento)) {
-    console.log(">>> APROVADO NA DATA DE NASCIMENTO <<<\n")
-      return true; 
-    }// identificamos que é igual na documentação
-    console.log(">>> REPROVADO NA DATA DE NASCIMENTO <<<\n")
+    console.log(
+      "- Data de Nascimento do cliente: ",
+      this.kycUser.cliente.data_nascimento
+    );
+    if (
+      this.modelUser.dateOfBirth ===
+      this.formatDate(this.kycUser.cliente.data_nascimento)
+    ) {
+      console.log(">>> APROVADO NA DATA DE NASCIMENTO <<<\n");
+      return true;
+    } // identificamos que é igual na documentação
+    console.log(">>> REPROVADO NA DATA DE NASCIMENTO <<<\n");
     return false;
   }
 
   async validateCPF() {
     console.log("---- Validando CPF...");
-    console.log("- Image(s): ", this.extractImages())
+    console.log("- Image(s): ", this.extractImages());
     console.log("- CPF extraído: ", this.modelUser.cpf);
     console.log("- CPF do cliente: ", this.kycUser.cliente.cpf);
 
-    if(this.modelUser.cpf === this.formatNumber(this.kycUser.cliente.cpf)) {
-      console.log(">>> APROVADO NO CPF <<<\n")
+    if (this.modelUser.cpf === this.formatNumber(this.kycUser.cliente.cpf)) {
+      console.log(">>> APROVADO NO CPF <<<\n");
       return true;
     } // identificamos que é igual na documentação
-    console.log(">>> REPROVADO NO CPF <<<\n")
+    console.log(">>> REPROVADO NO CPF <<<\n");
     return false;
   }
 
   formatNumber(input: any): string {
-    if (typeof input !== 'string' && typeof input !== 'number') {
-      console.log('O valor de entrada deve ser uma string ou número.');
+    if (typeof input !== "string" && typeof input !== "number") {
+      console.log("O valor de entrada deve ser uma string ou número.");
     }
 
-    const formattedNumber = String(input).replace(/\D/g, ''); // Remove todos os caracteres não numéricos
+    const formattedNumber = String(input).replace(/\D/g, ""); // Remove todos os caracteres não numéricos
     return formattedNumber;
   }
 
   formatDate(inputDate: string): string {
-    let dateParts = inputDate.split('-');
+    let dateParts = inputDate.split("-");
     let year = dateParts[0];
     let month = dateParts[1];
     let day = dateParts[2];
 
     // Verifica se o ano está no formato YY e ajusta para YYYY
     if (year.length === 2) {
-        let currentYear = new Date().getFullYear().toString();
-        let century = currentYear.substring(0, 2);
-        year = century + year;
+      let currentYear = new Date().getFullYear().toString();
+      let century = currentYear.substring(0, 2);
+      year = century + year;
     }
 
     return `${day}/${month}/${year}`;
@@ -167,7 +215,7 @@ export class AnalyzeKYCUseCase {
       .then(() => this.runModel())
       .then(() => this.extractWarnings())
       .catch((err) => {
-        console.error('Erro ao processar KYC', err);
+        console.error(`[-= ${this.kycUser.cliente.cpf} -=] Erro ao processar KYC, ${JSON.stringify(this.kycUser.ocr.filesId)}`, err);
       });
   }
 }
@@ -230,8 +278,8 @@ interface KYCData {
       ResultMessage: string;
     };
     filesId: {
-      'doc-front': number;
-      'doc-back': number;
+      "doc-front": number;
+      "doc-back": number;
     };
   };
   facematch: {
@@ -249,8 +297,8 @@ interface KYCData {
       documentBack: any;
     };
     filesId: {
-      'doc-front': number;
-      'doc-back': number;
+      "doc-front": number;
+      "doc-back": number;
       selfie: number;
     };
   };

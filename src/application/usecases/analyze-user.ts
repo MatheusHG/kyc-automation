@@ -4,11 +4,9 @@ import { AnalyzeKYCUseCase } from "./analyze-kyc";
 
 export class AnalyzeUserUseCase {
   public sheet: Express.Multer.File;
-  public dateNewValidation: ResponseModelValidation[];
 
   constructor(sheet: Express.Multer.File) {
     this.sheet = sheet;
-    this.dateNewValidation = [] as ResponseModelValidation[];
   }
 
   readSheet() {
@@ -19,69 +17,14 @@ export class AnalyzeUserUseCase {
     fileStream
       .pipe(csv())
       .on("data", (data) => {
-        const randomDelay = Math.floor(Math.random() * 300) + 1; // Gera um número aleatório entre 1 e 20
+        const randomDelay = Math.floor(Math.random() * 4000) + 1; // Gera um número aleatório entre 1 e 20
         console.log(
           `Aguardando ${randomDelay} segundos antes de chamar execute novamente...`
         );
 
         setTimeout(() => {
           const analyzeKYC = new AnalyzeKYCUseCase(data);
-          analyzeKYC
-            .execute()
-            .then((status: ModelAnalysis[]) => {
-              // const isValid = revalidations.every((revalidation) => revalidation);
-              // falta checar se esse usuário teria sido aprovado de primeira
-              
-              status.forEach((item) => {
-                const index = this.dateNewValidation.findIndex(
-                  (validation) => validation.case === item.case
-                );
-
-                if (index !== -1) {
-                  if (item.statusAfter && !item.statusBefore) {
-                    console.log("1 - JÁ EXISTE INCREMENTAAAAA UHULLLL");
-                    this.dateNewValidation[index].countEfficient++;
-                  } // meu modelo foi eficiente
-                  if (!item.statusAfter && !item.statusBefore) {
-                    this.dateNewValidation[index].countReprove++;
-                  } // manteve o erro
-                  if (item.statusAfter && item.statusBefore) {
-                    this.dateNewValidation[index].countApprove++;
-                  } // continuou aprovado
-                } // já existe
-                else {
-                  if (item.statusAfter && !item.statusBefore) {
-                    this.dateNewValidation.push({
-                      case: item.case,
-                      countEfficient: 1,
-                      countApprove: 0,
-                      countReprove: 0,
-                    });
-                  } // meu modelo foi eficiente
-                  if (!item.statusAfter && !item.statusBefore) {
-                    this.dateNewValidation.push({
-                      case: item.case,
-                      countEfficient: 0,
-                      countApprove: 0,
-                      countReprove: 1,
-                    });
-                  } // manteve o erro
-                  if (item.statusAfter && item.statusBefore) {
-                    this.dateNewValidation.push({
-                      case: item.case,
-                      countEfficient: 0,
-                      countApprove: 1,
-                      countReprove: 0,
-                    });
-                  } // continuou aprovado
-                } // não existe
-              });
-
-              console.log("RESULTADO FINAL", this.dateNewValidation);
-            })
-            .catch((err) => {
-              console.log("Erro ao processar KYC", err);
-            });
+          analyzeKYC.execute();
         }, randomDelay * 1000);
       })
       .on("error", (err) => {

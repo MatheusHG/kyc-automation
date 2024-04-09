@@ -1,3 +1,4 @@
+import UserKYCResults from "../../models/user-kyc";
 import {
   extractCPFNumber,
   extractDateOfBirth,
@@ -7,8 +8,7 @@ import { KYCModelUseCase } from "./kyc-model";
 
 export class AnalyzeKYCUseCase {
   public modelUser: ModelUser;
-  private modelResponse: ModelAnalysis[];
-
+  public statusEnd: string;
   public kycUser: KYCData = {} as KYCData;
   public alertsUser: any[];
   public componentMap: ComponentMap = {
@@ -29,17 +29,17 @@ export class AnalyzeKYCUseCase {
     this.kycUser = JSON.parse(kycUser["Meta"]);
     this.alertsUser = [];
     this.modelUser = {} as ModelUser;
-    this.modelResponse = [] as ModelAnalysis[];
+    this.statusEnd = "Análise Manual";
   }
 
   async runModel() {
-    console.log("\n-=-=-= Lendo o Modelo =-=-=-");
+    // console.log("\n-=-=-= Lendo o Modelo =-=-=-");
     const kycModelUseCase = new KYCModelUseCase(
       "Extraia todas as informações presentes nas imagens",
       this.extractImages()
     ); // Extraia apenas o número do cpf da imagem, se existir.
     const result = await kycModelUseCase.execute();
-    console.log("\n>> Dados extraidos:\n", result);
+    // console.log("\n>> Dados extraidos:\n", result);
 
     this.modelUser = {
       cpf: extractCPFNumber(result),
@@ -49,20 +49,26 @@ export class AnalyzeKYCUseCase {
   }
 
   async extractWarnings() {
-    console.log("-=-=-=-=-=-=-=-=-=-=-=-");
-    console.log("\n>> 📚 Analisando documento...");
+    // console.log("-=-=-=-=-=-=-=-=-=-=-=-");
+    // console.log("\n>> 📚 Analisando documento...");
     const avisos = this.kycUser.ocr.avisos;
 
     if (avisos) {
-      const revalidations = await Promise.all(
+      this.alertsUser = await Promise.all(
         avisos.map(async (aviso: string) => {
           const { alert, filter } = this.extractAlertInfo(aviso);
 
           if (alert === "Alerta") {
+            const result = await this.switchMapper(filter);
+            if (result && this.statusEnd === "Análise Manual")
+              this.statusEnd = "Aprovado";
+            else if (!result && this.statusEnd === "Análise Manual")
+              this.statusEnd = "Reprovado";
+
             return {
               case: filter,
               statusBefore: false,
-              statusAfter: await this.switchMapper(filter),
+              statusAfter: result,
             };
           }
 
@@ -74,7 +80,7 @@ export class AnalyzeKYCUseCase {
         })
       );
 
-      return revalidations;
+      return this.alertsUser;
     } else return [] as any;
   }
 
@@ -85,7 +91,7 @@ export class AnalyzeKYCUseCase {
   }
 
   async switchMapper(alertMessage: string) {
-    console.log(">> Analisando Alerta: ", alertMessage);
+    // console.log(">> Analisando Alerta: ", alertMessage);
 
     switch (alertMessage) {
       case "CPF não encontrado no documento do cliente / Documento sem CPF":
@@ -109,9 +115,13 @@ export class AnalyzeKYCUseCase {
           return this.validateName().then(() => this.validateCPF());
         });
       case "Nenhuma informação válida na frente do documento":
-        return this.validateName().then(() => this.validateCPF()).then(() => this.validateDateOfBirth());
+        return this.validateName()
+          .then(() => this.validateCPF())
+          .then(() => this.validateDateOfBirth());
       case "Tipo do documento Frente é diferente do documento Verso (DOCTYPE)":
-        return this.validateName().then(() => this.validateCPF()).then(() => this.validateDateOfBirth());
+        return this.validateName()
+          .then(() => this.validateCPF())
+          .then(() => this.validateDateOfBirth());
       default:
         return false;
     }
@@ -126,14 +136,10 @@ export class AnalyzeKYCUseCase {
   }
 
   async validateName() {
-    console.log("---- Validando nome...");
-    console.log("- Nome extraído: ", this.modelUser.name);
-    console.log("- Nome do cliente: ", this.kycUser.cliente.nome);
-
     const modelName = this.modelUser.name;
     const clientName = this.kycUser.cliente.nome;
 
-    if(modelName === null || clientName === null) return false;
+    if (modelName === null || clientName === null) return false;
 
     if (modelName.toLowerCase() === clientName.toLowerCase()) {
       return true;
@@ -142,7 +148,7 @@ export class AnalyzeKYCUseCase {
     const modelParts = modelName.trim().split(" ");
     const clientParts = clientName.trim().split(" ");
 
-    if(modelParts.length + 1 === clientParts.length) {
+    if (modelParts.length + 1 === clientParts.length) {
       const modelLastName = modelParts[modelParts.length - 1].toLowerCase();
       const clientLastName = clientParts[clientParts.length - 1].toLowerCase();
       if (!clientLastName.includes(modelLastName)) {
@@ -150,38 +156,40 @@ export class AnalyzeKYCUseCase {
       }
     }
 
+    // if(this.kycUser.cliente.nome === 
+    //   (this.kycUser.ocr.log_doc_frente.DocInfo?.NAME || this.kycUser.cliente.nome === this.kycUser.ocr.log_doc_verso.DocInfo?.NAME)) {
+    //     return true;
+    //   }
+
     return false;
   }
 
   async validateDateOfBirth() {
-    console.log("---- Validando Data de Nascimento...");
-    console.log("- Data de Nascimento extraída: ", this.modelUser.dateOfBirth);
-    console.log(
-      "- Data de Nascimento do cliente: ",
-      this.kycUser.cliente.data_nascimento
-    );
     if (
       this.modelUser.dateOfBirth ===
       this.formatDate(this.kycUser.cliente.data_nascimento)
     ) {
-      console.log(">>> APROVADO NA DATA DE NASCIMENTO <<<\n");
       return true;
-    } // identificamos que é igual na documentação
-    console.log(">>> REPROVADO NA DATA DE NASCIMENTO <<<\n");
+    }
+
+    // if(this.formatDate(this.kycUser.cliente.data_nascimento) === 
+    //   (this.formatDate(this.kycUser.ocr.log_doc_frente.DocInfo?.BIRTHDATE) || this.formatDate(this.kycUser.ocr.log_doc_verso.DocInfo?.BIRTHDATE))) {
+    //     return true;
+    //   }
+
     return false;
   }
 
   async validateCPF() {
-    console.log("---- Validando CPF...");
-    console.log("- Image(s): ", this.extractImages());
-    console.log("- CPF extraído: ", this.modelUser.cpf);
-    console.log("- CPF do cliente: ", this.kycUser.cliente.cpf);
-
     if (this.modelUser.cpf === this.formatNumber(this.kycUser.cliente.cpf)) {
-      console.log(">>> APROVADO NO CPF <<<\n");
       return true;
-    } // identificamos que é igual na documentação
-    console.log(">>> REPROVADO NO CPF <<<\n");
+    }
+
+    // if(this.kycUser.cliente.cpf === 
+    //   (this.kycUser.ocr.log_doc_frente.DocInfo?.CPF) || this.kycUser.ocr.log_doc_verso.DocInfo?.CPF) {
+    //     return true;
+    //   }
+
     return false;
   }
 
@@ -194,29 +202,132 @@ export class AnalyzeKYCUseCase {
     return formattedNumber;
   }
 
-  formatDate(inputDate: string): string {
-    let dateParts = inputDate.split("-");
-    let year = dateParts[0];
-    let month = dateParts[1];
-    let day = dateParts[2];
+  formatDate(date: string): string {
+    if (!date) {
+      return '';
+    }
 
-    // Verifica se o ano está no formato YY e ajusta para YYYY
+    const replaceSimbols = date.replace(/[\/-]/g, " ");
+    let day = replaceSimbols.split(" ")[0];
+    let monthName = replaceSimbols.split(" ")[1];
+    let year = replaceSimbols.split(" ")[2];
+    
+    if(day.length === 4) {
+      year = day;
+      day = replaceSimbols.split(" ")[2];
+    }
+
     if (year.length === 2) {
       let currentYear = new Date().getFullYear().toString();
       let century = currentYear.substring(0, 2);
       year = century + year;
     }
 
+    const monthsMap: MonthsMap = {
+      JAN: "01",
+      FEV: "02",
+      MAR: "03",
+      ABR: "04",
+      MAI: "05",
+      JUN: "06",
+      JUL: "07",
+      AGO: "08",
+      SET: "09",
+      OUT: "10",
+      NOV: "11",
+      DEZ: "12",
+    };
+
+    const month = monthsMap[monthName] || monthName;
+
     return `${day}/${month}/${year}`;
+  }
+
+  async savingResults() {
+    // Salvar os resultados no banco
+    const data = {
+      status: this.statusEnd,
+      cpf: this.kycUser.cliente.cpf,
+      nome: this.kycUser.cliente.nome,
+      genero: this.kycUser.cliente.genero,
+      data_de_nascimento: this.kycUser.cliente.data_nascimento,
+      estado: this.kycUser.cliente.estado,
+      cidade: this.kycUser.cliente.cidade,
+      filesId: this.kycUser.ocr.filesId,
+      log_kyc_received: {
+        birthdate:
+          this.kycUser.ocr.log_doc_frente.DocInfo.BIRTHDATE ||
+          this.kycUser.ocr.log_doc_verso.DocInfo.BIRTHDATE,
+        doctype:
+          this.kycUser.ocr.log_doc_frente.DocInfo.DOCTYPE ||
+          this.kycUser.ocr.log_doc_verso.DocInfo.DOCTYPE,
+        mothername:
+          this.kycUser.ocr.log_doc_frente.DocInfo.MOTHERNAME ||
+          this.kycUser.ocr.log_doc_verso.DocInfo.MOTHERNAME,
+        name:
+          this.kycUser.ocr.log_doc_frente.DocInfo.NAME ||
+          this.kycUser.ocr.log_doc_verso.DocInfo.NAME,
+        cpf:
+          this.kycUser.ocr.log_doc_frente.DocInfo.CPF ||
+          this.kycUser.ocr.log_doc_verso.DocInfo.CPF,
+      },
+      log_kyc_analyzed: {
+        birthdate: this.modelUser.dateOfBirth,
+        // mothername: this.kycUser.cliente.nome_mae,
+        name: this.modelUser.name,
+        cpf: this.modelUser.cpf,
+      },
+      results: this.alertsUser,
+      created_at: new Date(this.kycUser.ocr.finish_time)
+    };
+
+    const response = await UserKYCResults.findOne({ cpf: data.cpf });
+
+    if (response) {
+      if ((response.status === "Análise Manual" || response.status === "Reprovado") && data.status === "Aprovado") {
+        await UserKYCResults.updateOne(
+          { cpf: data.cpf },
+          {
+            $set: {
+              status: data.status,
+              results: data.results,
+              log_kyc_analyzed: data.log_kyc_analyzed,
+            },
+          }
+        );
+      }
+    } else {
+      await UserKYCResults.create(data);
+    }
   }
 
   async execute() {
     return Promise.resolve()
       .then(() => this.runModel())
       .then(() => this.extractWarnings())
-      .catch((err) => {
-        console.error(`[-= ${this.kycUser.cliente.cpf} -=] Erro ao processar KYC, ${JSON.stringify(this.kycUser.ocr.filesId)}`, err);
+      .then(() => this.savingResults())
+      .then(() => {
+        console.log(">>> Finalizado ", {
+          status: this.statusEnd,
+          cpf: this.kycUser.cliente.cpf
+        });
+      })
+      .catch(async (err) => {
+        try {
+          console.log("ERROR MENSAGEM -> ", err.message)
+          const response = await UserKYCResults.findOne({ cpf: this.kycUser.cliente.cpf, status: 'Aprovado' });
+          if (!response && err.message === '[GoogleGenerativeAI Error]: Candidate was blocked due to SAFETY') {
+            this.statusEnd = "Análise Manual";
+            this.savingResults();
+            console.log(`Erro ao validar ${this.kycUser.cliente.cpf}. Status: Análise Manual`);
+          } else {
+            console.log(`${this.kycUser.cliente.cpf} ERROR -> ${err.message}. Já aprovado na base, mantém aprovado, ou OCR sem documento.`);
+          }
+        } catch (error) {
+          console.error("Erro ao buscar registro:", err.message);
+        }
       });
+      
   }
 }
 
@@ -304,8 +415,18 @@ interface KYCData {
   };
 }
 
-interface ModelAnalysis {
-  case: string;
-  countSuccess: number;
-  countError: number;
+interface MonthsMap {
+  [key: string]: string;
+  JAN: string;
+  FEV: string;
+  MAR: string;
+  ABR: string;
+  MAI: string;
+  JUN: string;
+  JUL: string;
+  AGO: string;
+  SET: string;
+  OUT: string;
+  NOV: string;
+  DEZ: string;
 }

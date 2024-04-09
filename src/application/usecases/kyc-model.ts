@@ -18,7 +18,7 @@ export class KYCModelUseCase {
 
   private bufferImage() {
     const imagesBuffer = this.filesImgs.map(img => {
-      const path = `/Users/matheushenrique/Documents/marjosports/script_image/src/controllers/Dezembro/${img}.jpg`;
+      const path = `/Users/matheushenrique/Documents/marjosports/script_image/src/controllers/Fevereiro_13-15/${img}.jpg`;
       if (fs.existsSync(path)) {
         const data = fs.readFileSync(path).toString('base64');
         return {
